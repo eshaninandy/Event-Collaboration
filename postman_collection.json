@@ -1,0 +1,417 @@
+{
+	"info": {
+		"_postman_id": "event-collab-api",
+		"name": "Event Collaboration API",
+		"description": "Complete API collection for Event Collaboration API",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"item": [
+				{
+					"name": "API Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/",
+							"host": ["{{base_url}}"],
+							"path": [""]
+						},
+						"description": "Health check endpoint to verify the API is running. Returns: 'Event Collaboration API is running!'"
+					}
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Create User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Automatically save userId to environment variable",
+									"if (pm.response.code === 201) {",
+									"    const response = pm.response.json();",
+									"    if (response.id) {",
+									"        pm.environment.set('userId', response.id);",
+									"        console.log('User created! userId saved to environment:', response.id);",
+									"    }",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": ["{{base_url}}"],
+							"path": ["users"]
+						},
+						"description": "Creates a new user. The userId will be automatically saved to the environment variable for use in other requests."
+					}
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users",
+							"host": ["{{base_url}}"],
+							"path": ["users"]
+						}
+					}
+				},
+				{
+					"name": "Get User by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/users/:userId",
+							"host": ["{{base_url}}"],
+							"path": ["users", ":userId"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "replace-with-user-id"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Events",
+			"item": [
+				{
+					"name": "Create Event",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Team Meeting\",\n  \"description\": \"Weekly team sync\",\n  \"status\": \"TODO\",\n  \"startTime\": \"2024-01-15T10:00:00Z\",\n  \"endTime\": \"2024-01-15T11:00:00Z\",\n  \"creatorId\": \"{{userId}}\",\n  \"inviteeIds\": [\"{{inviteeUserId}}\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/events",
+							"host": ["{{base_url}}"],
+							"path": ["events"]
+						},
+						"description": "Creates a new event. **Important:** The creatorId and inviteeIds must be different users. Make sure to create at least 2 users first:\n1. Create first user - userId will be saved automatically\n2. Create second user - manually save the id as 'inviteeUserId' environment variable\n3. Then create event using {{userId}} as creator and {{inviteeUserId}} in inviteeIds array"
+					}
+				},
+				{
+					"name": "Batch Create Events (500)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"// Generate 500 events for batch create with randomized invitee selection",
+									"const userId = pm.environment.get('userId');",
+									"const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;",
+									"",
+									"// Validate userId is set and is a valid UUID format",
+									"if (!userId || !uuidRegex.test(userId)) {",
+									"    throw new Error('Please set the \\'userId\\' environment variable to a valid UUID. Create a user first using the \\'Create User\\' request.');",
+									"}",
+									"",
+									"// Helper function to shuffle array (Fisher-Yates shuffle)",
+									"function shuffleArray(array) {",
+									"    const shuffled = [...array];",
+									"    for (let i = shuffled.length - 1; i > 0; i--) {",
+									"        const j = Math.floor(Math.random() * (i + 1));",
+									"        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];",
+									"    }",
+									"    return shuffled;",
+									"}",
+									"",
+									"// Helper function to get random elements from array",
+									"function getRandomElements(array, count) {",
+									"    const shuffled = shuffleArray(array);",
+									"    return shuffled.slice(0, Math.min(count, array.length));",
+									"}",
+									"",
+									"// Function to get or create invitee users (ensure at least 2 users exist)",
+									"function getInviteeUserIds(callback) {",
+									"    const baseUrl = pm.environment.get('base_url') || pm.variables.get('base_url');",
+									"    ",
+									"    // First, try to get all users",
+									"    pm.sendRequest({",
+									"        url: baseUrl + '/users',",
+									"        method: 'GET'",
+									"    }, function (err, response) {",
+									"        if (err) {",
+									"            throw new Error('Failed to fetch users: ' + err.message);",
+									"        }",
+									"        ",
+									"        let allUsers = [];",
+									"        if (response.code === 200) {",
+									"            allUsers = response.json();",
+									"        }",
+									"        ",
+									"        // Filter out the creator from the list",
+									"        let inviteeUsers = allUsers.filter(user => user.id !== userId);",
+									"        ",
+									"        // We need at least 2 users total (creator + at least 1 invitee)",
+									"        // If we have fewer than 2 invitees, create more",
+									"        const minInviteesNeeded = 2;",
+									"        const usersToCreate = Math.max(0, minInviteesNeeded - inviteeUsers.length);",
+									"        ",
+									"        if (usersToCreate === 0) {",
+									"            // We have enough users, use them",
+									"            const inviteeIds = inviteeUsers.map(user => user.id);",
+									"            console.log('Using ' + inviteeIds.length + ' existing invitee users');",
+									"            callback(inviteeIds);",
+									"            return;",
+									"        }",
+									"        ",
+									"        // Create additional users if needed (using recursive callback)",
+									"        console.log('Creating ' + usersToCreate + ' additional invitee user(s)...');",
+									"        const timestamp = Date.now();",
+									"        const newUserIds = [];",
+									"        let createdCount = 0;",
+									"        ",
+									"        function createNextUser() {",
+									"            if (createdCount >= usersToCreate) {",
+									"                // All users created, combine with existing",
+									"                const allInviteeIds = inviteeUsers.map(user => user.id).concat(newUserIds);",
+									"                console.log('Total invitee users available: ' + allInviteeIds.length);",
+									"                callback(allInviteeIds);",
+									"                return;",
+									"            }",
+									"            ",
+									"            pm.sendRequest({",
+									"                url: baseUrl + '/users',",
+									"                method: 'POST',",
+									"                header: {",
+									"                    'Content-Type': 'application/json'",
+									"                },",
+									"                body: {",
+									"                    mode: 'raw',",
+									"                    raw: JSON.stringify({",
+									"                        name: 'Auto Invitee User ' + (createdCount + 1),",
+									"                        email: 'auto-invitee-' + timestamp + '-' + createdCount + '@example.com'",
+									"                    })",
+									"                }",
+									"            }, function (createErr, createResponse) {",
+									"                if (createErr || createResponse.code !== 201) {",
+									"                    throw new Error('Failed to create invitee user: ' + (createErr ? createErr.message : 'Unknown error'));",
+									"                }",
+									"                ",
+									"                const newUser = createResponse.json();",
+									"                newUserIds.push(newUser.id);",
+									"                createdCount++;",
+									"                createNextUser();",
+									"            });",
+									"        }",
+									"        ",
+									"        createNextUser();",
+									"    });",
+									"}",
+									"",
+									"// Get invitee user IDs (async)",
+									"getInviteeUserIds(function(inviteeUserIds) {",
+									"    if (!inviteeUserIds || inviteeUserIds.length === 0) {",
+									"        throw new Error('No invitee users available. At least one invitee user is required.');",
+									"    }",
+									"    ",
+									"    // Generate 500 events with randomized invitees",
+									"    const events = [];",
+									"    for (let i = 0; i < 500; i++) {",
+									"        const hour = 10 + (i % 5);",
+									"        ",
+									"        // Randomly choose 1 or 2 invitees for each event",
+									"        const numInvitees = Math.random() < 0.5 ? 1 : 2;",
+									"        ",
+									"        // Randomly select invitees from available users",
+									"        const selectedInvitees = getRandomElements(inviteeUserIds, numInvitees);",
+									"        ",
+									"        events.push({",
+									"            title: `Event-${i}`,",
+									"            description: `desc-${i}`,",
+									"            status: 'TODO',",
+									"            startTime: new Date(`2024-02-01T${hour.toString().padStart(2, '0')}:00:00Z`).toISOString(),",
+									"            endTime: new Date(`2024-02-01T${(hour + 1).toString().padStart(2, '0')}:00:00Z`).toISOString(),",
+									"            creatorId: userId,",
+									"            inviteeIds: selectedInvitees",
+									"        });",
+									"    }",
+									"    ",
+									"    console.log('Generated 500 events with randomized invitees (1 or 2 per event)');",
+									"    pm.environment.set('batchRequest', JSON.stringify({ events }));",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{{batchRequest}}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/events/batch",
+							"host": ["{{base_url}}"],
+							"path": ["events", "batch"]
+						},
+						"description": "Creates 500 events in a single batch request. This tests the batchCreate endpoint performance and transaction handling. Expected to complete in under 2 seconds.\n\n**Setup:**\n1. Create first user - userId will be saved automatically\n2. The pre-request script will automatically find or create invitee users (different from creator)\n3. The pre-request script will generate 500 events automatically\n\n**Automatic Invitee Selection:**\n- The script fetches all existing users and filters out the creator\n- Ensures at least 2 invitee users are available (creates more if needed)\n- Each event randomly gets 1 or 2 invitees from the available users\n- Invitees are randomly selected for each event\n- No manual setup required!\n\n**Expected:**\n- Response time: < 2000ms\n- All 500 events created successfully\n- Events have randomized invitees (1 or 2 per event)\n- Transaction ensures all-or-nothing consistency"
+					}
+				},
+				{
+					"name": "Get Event by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/events/:eventId",
+							"host": ["{{base_url}}"],
+							"path": ["events", ":eventId"],
+							"variable": [
+								{
+									"key": "eventId",
+									"value": "replace-with-event-id"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Event",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Updated Team Meeting\",\n  \"status\": \"IN_PROGRESS\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/events/:eventId",
+							"host": ["{{base_url}}"],
+							"path": ["events", ":eventId"],
+							"variable": [
+								{
+									"key": "eventId",
+									"value": "replace-with-event-id"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Event",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/events/:eventId",
+							"host": ["{{base_url}}"],
+							"path": ["events", ":eventId"],
+							"variable": [
+								{
+									"key": "eventId",
+									"value": "replace-with-event-id"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Conflicts",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/events/conflicts/:userId",
+							"host": ["{{base_url}}"],
+							"path": ["events", "conflicts", ":userId"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "replace-with-user-id"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Merge All Overlapping Events",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/events/merge-all/:userId",
+							"host": ["{{base_url}}"],
+							"path": ["events", "merge-all", ":userId"],
+							"variable": [
+								{
+									"key": "userId",
+									"value": "replace-with-user-id"
+								}
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:3000",
+			"type": "string"
+		}
+	]
+}
